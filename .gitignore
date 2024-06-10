@@ -1,0 +1,8 @@
+.DS_Store
+.idea/*
+wandb/*
+test*
+*.npy
+data/*
+__pycache__/*
+venv/*
