@@ -3,6 +3,6 @@ matplotlib==3.7.1
 numpy==1.24.3
 pysindy==1.7.5
 scipy==1.11.4
-torch==1.12.1+cu113
+torch
 torchdiffeq==0.2.3
 tqdm==4.65.0
