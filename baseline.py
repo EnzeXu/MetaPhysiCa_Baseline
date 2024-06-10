@@ -26,6 +26,7 @@ import project_utils
 from docopt import docopt
 
 use_cuda = torch.cuda.is_available()
+gpu_id = 0
 if use_cuda:
     device = torch.device('cuda', gpu_id)
 else:
