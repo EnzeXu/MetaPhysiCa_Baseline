@@ -1,5 +1,2 @@
-*
-!.gitignore
-
-!Lotka_Volterra/
-!Lotka_Volterra_index/
+Lotka_Volterra_fig/*
+Lotka_Volterra_meta/*
