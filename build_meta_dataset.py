@@ -64,7 +64,7 @@ META_NAME_DICT = {
 LIST_ODE = ["Lotka_Volterra"]  # ["Lotka_Volterra", "Lorenz", "SIR"]
 LIST_SETTING = ["default_0"]  # ["default_0", "default_11", "default_12", "default_13"]
 LIST_NOISE_RATIO = ["0.00", "0.05", "0.10", "0.15", "0.20"]# ["0.00"]  # ["0.00", "0.05", "0.10", "0.15", "0.20"]
-LIST_SEED = list(range(20))#list(range(1))  # list(range(20))
+LIST_SEED = list(range(3))#list(range(1))  # list(range(20))
 
 
 def rmdirs(folder_path):

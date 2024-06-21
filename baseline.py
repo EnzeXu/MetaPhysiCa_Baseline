@@ -240,6 +240,11 @@ class MetaPhysiCa(nn.Module):
         meanW = self.allW.detach().mean(dim=0)
         # print("for i in tqdm(range(test_y.shape[0]), leave=False):")
 
+        if not fig_save_root:
+            fig_save_root = "fig/"
+        if not os.path.exists(fig_save_root):
+            os.makedirs(fig_save_root)
+
         save_result_path = f"{fig_save_root}/output.csv"
         f_result = open(save_result_path, "w")
         f_result.write("environment_id,type,variable_id,variable_name,ode\n")
@@ -289,10 +294,7 @@ class MetaPhysiCa(nn.Module):
                 plt.plot(test_t, test_pred_y[i][:, 0].detach().cpu().numpy())
                 plt.axvline(test_t[input_length], color='black', linestyle='--')
                 plt.show()
-            if not fig_save_root:
-                fig_save_root = "fig/"
-            if not os.path.exists(fig_save_root):
-                os.makedirs(fig_save_root)
+
 
             if True:  # Enze
                 plt.figure(figsize=(8, 6))
