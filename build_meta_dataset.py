@@ -578,6 +578,6 @@ def one_time_run_from_loading(input_folder):
 
 if __name__ == "__main__":
     # python test_build_meta_dataset.py --data=lotka_volterra --datatype=2
-    # one_time_convert_ipad_to_meta("ipad_dataset/")
+    one_time_convert_ipad_to_meta("ipad_dataset/")
     one_time_run_from_loading("ipad_dataset/")
     pass
