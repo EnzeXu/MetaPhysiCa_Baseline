@@ -69,16 +69,19 @@ class SeriesDataset(ABC, Dataset):
             plt.ylabel(kwargs["ylabel"])
         if "title" in kwargs:
             plt.title(kwargs["title"])
-        plt.show()
+        # plt.show()
 
     def scale(self, is_scale=False):
+        # print(f"self.max_for_scaling = {self.max_for_scaling}, is_scale = {is_scale}")
         if self.max_for_scaling is None:
             if is_scale:
                 self.max_for_scaling = self.y.amax(dim=[0, 1]) / 10.
             else:
                 self.max_for_scaling = torch.ones(self.state_dim)
-
+        # print(f"self.max_for_scaling = {self.max_for_scaling}")
+        # print(f"y: min ({torch.min(self.y)}), max ({torch.max(self.y)})")
         self.y = self.y / self.max_for_scaling
+        # print(f"y: min ({torch.min(self.y)}), max ({torch.max(self.y)})")
 
     def return_unscaled_y(self):
         return self.y * self.max_for_scaling
@@ -134,6 +137,7 @@ class SeriesDataset(ABC, Dataset):
         return param_arrays
 
     def save(self):
+        raise NotImplementedError
         with open(self.save_filename, "wb") as f:
             all_var = [
                 self.state_names,
@@ -148,7 +152,7 @@ class SeriesDataset(ABC, Dataset):
             torch.save(all_var, f)
 
     def load(self):
-        print(f"Using saved file: {self.save_filename}")
+        # print(f"Using saved file: {self.save_filename}")
         (
             self.state_names,
             self.state_dim,
@@ -422,7 +426,11 @@ class LotkaVolterraDataset(SeriesDataset):
             is_scale,
             seed,
         ]
+
+        # print("##### Real hash #####")
+        # print(json.dumps(dataset_config, indent=4))
         dataset_config_hash = sha1(json.dumps(dataset_config).encode()).hexdigest()
+        # print(f"hash saved as {dataset_config_hash}\n")
         self.save_filename = os.path.join(
             root, f"{self.__class__.__name__}_{dataset_config_hash}.pt"
         )
@@ -454,6 +462,13 @@ class LotkaVolterraDataset(SeriesDataset):
         gamma_array = param_arrays[2]
         delta_array = param_arrays[3]
 
+        # Enze
+        print("y0_array:", y0_array.shape, y0_array)
+        print("alpha_array:", alpha_array.shape, alpha_array)
+        print("beta_array:", beta_array.shape, beta_array)
+        print("gamma_array:", gamma_array.shape, gamma_array)
+        print("delta_array:", delta_array.shape, delta_array)
+
         self.y = [None] * n_samples
         for i in range(n_samples):
             args = (
@@ -480,7 +495,7 @@ class LotkaVolterraDataset(SeriesDataset):
         t = np.linspace(0, T, nT)
         input_length = int(nT // input_length_factor)
         is_scale = True
-        for seed in range(k):
+        for seed in range(1):  # Enze: for seed in range(k):
             np.random.seed(seed)    # Set seed
             if datatype == 1:
                 # 1. Single dynamical system parameter across all training curves
@@ -518,7 +533,7 @@ class LotkaVolterraDataset(SeriesDataset):
                 delta_ood = (0.00008 * 12, 0.00012 * 12)
 
             train_data = cls(
-                int(n_samples * 0.8),
+                int(n_samples * 1.0),# Enze: int(n_samples * 0.8),
                 t,
                 input_length=input_length,
                 y0=y0_id,
@@ -687,7 +702,7 @@ class SIREpidemicDataset(SeriesDataset):
                 gamma_ood = (0.8, 1.2)
 
             train_data = cls(
-                int(n_samples * 0.8),
+                int(n_samples * 0.8),  # Enze: int(n_samples * 0.8),
                 t,
                 input_length=input_length,
                 y0=y0_id,

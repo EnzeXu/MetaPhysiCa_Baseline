@@ -6,3 +6,12 @@ test*
 data/*
 __pycache__/*
 venv/*
+data2/*
+results/*
+
+test*
+
+tmp/*
+fig/*
+log_enze.txt
+*.ipynb

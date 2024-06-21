@@ -1,0 +1,5 @@
+*
+!.gitignore
+
+!Lotka_Volterra/
+!Lotka_Volterra_index/

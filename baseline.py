@@ -19,11 +19,14 @@ import torch.nn as nn
 import pysindy as ps
 from basis_library import BasisLibrary
 import matplotlib.pyplot as plt
+import sympy as sp
 from tqdm.autonotebook import tqdm
 from torchdiffeq import odeint as nn_odeint
 from datasets import *
 import project_utils
 from docopt import docopt
+
+import sympy as sp
 
 use_cuda = torch.cuda.is_available()
 gpu_id = 0
@@ -34,6 +37,10 @@ else:
 print("using {}".format(device))
 # device = "cpu"
 
+
+def transfer_var(ipad_eq):
+    meta_eq = ipad_eq.replace("x", "x0").replace("y", "x1").replace("z", "x2")
+    return meta_eq
 
 class STEFunction(torch.autograd.Function):
     @staticmethod
@@ -157,7 +164,10 @@ class MetaPhysiCa(nn.Module):
         best_loss = np.inf
         best_save_loss = np.inf
         best_xi = None
+        print("for epoch in tqdm(range(n_inner_epochs), leave=False):")
+        # goes first
         for epoch in tqdm(range(n_inner_epochs), leave=False):
+            # print(f"y.shape[0]: {y.shape[0]}")
             for batch_idx in range(0, y.shape[0], batch_size):
                 task_losses = []
                 task_reg = 0.
@@ -185,7 +195,7 @@ class MetaPhysiCa(nn.Module):
                     best_allW = self.allW.data.clone()
                     saved = "(saved)"
 
-                if debug:
+                if False:#debug:
                     print("=" * 40)
                     self.print()
                     print(loss, task_reg, l1_reg_xi, lambda_vrex_scheduled.get(), saved)
@@ -201,11 +211,12 @@ class MetaPhysiCa(nn.Module):
         self.allW.data = best_allW.data
         print(self.xi)
         self.print()
+
         torch.save(self, filename + ".pkl")
 
         return {"loss": best_loss, "sparsity": (self.xi > 0).sum().item()}
 
-    def test(self, test_data, test_filename=None, **test_params):
+    def test(self, test_data, test_filename=None, fig_save_root=None, truth_ode_list=None, **test_params):
         test_t = test_data.t
         test_y = test_data.y
         input_length = test_data.input_length
@@ -227,7 +238,14 @@ class MetaPhysiCa(nn.Module):
         test_pred_y = []
 
         meanW = self.allW.detach().mean(dim=0)
-        for i in tqdm(range(test_y.shape[0]), leave=False):
+        # print("for i in tqdm(range(test_y.shape[0]), leave=False):")
+
+        save_result_path = f"{fig_save_root}/output.csv"
+        f_result = open(save_result_path, "w")
+        f_result.write("environment_id,type,variable_id,variable_name,ode\n")
+
+        # for i in tqdm(range(test_y.shape[0]), leave=False):
+        for i in range(test_y.shape[0]):  # Enze
             # Separate task-specific parameters for test tasks
             # self.W = nn.Parameter(torch.rand(model.feature_library.n_output_features_, model.feature_library.n_input_features_, device=device))
             self.W = nn.Parameter(meanW.clone())
@@ -253,13 +271,16 @@ class MetaPhysiCa(nn.Module):
 
             all_losses = np.array(all_losses)
 
+            # Enze
+            print(f"$$$$$ Best weight for Environment {i}:", best_W)
+
             try:
                 test_pred_y.append(self.predict(test_y[i, 0], test_t, W=best_W))
             except Exception as e:
                 print(e)
                 test_pred_y.append(torch.tensor(np.nan * np.ones_like(test_y[i])))
 
-            if debug:
+            if False:  # debug:
                 print("=" * 80)
                 print(best_W * STEFunction.apply(self.xi))
                 plt.plot(range(n_inner_epochs // 10, n_inner_epochs), all_losses[n_inner_epochs // 10:])
@@ -268,10 +289,43 @@ class MetaPhysiCa(nn.Module):
                 plt.plot(test_t, test_pred_y[i][:, 0].detach().cpu().numpy())
                 plt.axvline(test_t[input_length], color='black', linestyle='--')
                 plt.show()
+            if not fig_save_root:
+                fig_save_root = "fig/"
+            if not os.path.exists(fig_save_root):
+                os.makedirs(fig_save_root)
 
+            if True:  # Enze
+                plt.figure(figsize=(8, 6))
+                for ode_id in range(test_y.shape[2]):
+                    plt.plot(test_t, test_y[i, :, ode_id].detach().cpu().numpy(), label=f"x{ode_id}_true")
+                    plt.plot(test_t, test_pred_y[i][:, ode_id].detach().cpu().numpy(), label=f"x{ode_id}_pred")
+                plt.legend(fontsize=15)
+                plt.title(f"MetaPhysiCa Baseline: Environment {i} - True vs. Pred", fontsize=20)
+                plt.tight_layout()
+                plt.savefig(f"{fig_save_root}/environment_{i}.png")
+                plt.close()
+
+                xi = best_W.cpu().detach().numpy()
+                fixed_rhs_list = [['1', 'x0', 'x1', 'x0^2', 'x0*x1', 'x1^2', 'x0^3', 'x0^2*x1', 'x0*x1^2', 'x1^3', 'sin(1*x0)', 'cos(1*x0)', 'sin(1*x1)', 'cos(1*x1)'] for _ in range(xi.shape[1])]
+
+
+                formatted_equations = formula_format(xi, fixed_rhs_list)
+                formatted_equations = [str(sp.sympify(item.replace("^", "**"))) for item in formatted_equations]
+
+
+                for i_ode, eq in enumerate(formatted_equations):
+                    truth_ode = transfer_var(truth_ode_list[i][i_ode])
+                    prediction_ode = eq
+                    if truth_ode_list:
+                        print(f"##### Truth: x{i_ode}' = {truth_ode}")
+                    print(f"##### Prediction: x{i_ode}' = {prediction_ode}")
+                    f_result.write(f"{i},{'truth'},{i_ode},x{i_ode},{truth_ode}\n")
+                    f_result.write(f"{i},{'prediction'},{i_ode},x{i_ode},{prediction_ode}\n")
+
+        f_result.close()
         test_pred_y = torch.stack(test_pred_y)
 
-        if plot:
+        if False:  #  plot:
             dim = test_y.shape[-1]
             ylabels = test_data.state_names
             labels = ["True", "Predicted"]
@@ -310,13 +364,23 @@ class MetaPhysiCa(nn.Module):
     def print(self):
         if self.xi is None:
             print("No coefficients")
-            return
+            return None
         else:
             coef = torch.round(torch.sigmoid(self.xi)).detach().cpu().numpy()
             input_features = self.feature_library.get_feature_names()
+
+            res_rhs_list = []
             for j in range(coef.shape[1]):
                 rhs = [f"{input_features[i]}" for i, c in enumerate(coef[:, j]) if np.abs(c) > 0.]
-                print(f"x{j}' = " + " + ".join(rhs))
+                # print(f"x{j}' = " + " + ".join(rhs))
+
+                rhs_clear = [item.replace(" ", "*") for item in rhs]
+                co_list = [c for i, c in enumerate(coef[:, j]) if np.abs(c) > 0.]
+                group_list = [f"{c} * {r}" for r, c in zip(rhs_clear, co_list)]
+                print(f"x{j}' = " + " + ".join(group_list))
+
+                res_rhs_list.append(rhs_clear)
+            return res_rhs_list
 
 
 def run(train_data, test_data, _config, _run):
@@ -350,6 +414,43 @@ def run(train_data, test_data, _config, _run):
 
     return model, train_results, valid_results, test_results
 
+def formula_format(xi, rhs_list):
+    """
+    Create formatted equations from coefficients and terms using sympy.
+
+    Args:
+    xi (numpy.ndarray): Coefficients matrix of shape (M, N) where M is the number of terms, N is the number of equations.
+    rhs_list (list of list of str): List of terms for each equation, shape (N, M).
+
+    Returns:
+    list of sympy.Expr: List of sympy expressions representing the equations.
+    """
+    # Ensure the input dimensions are correct
+    if xi.shape != (len(rhs_list[0]), len(rhs_list)):
+        raise ValueError("Dimensions of xi must match the dimensions of rhs_list (transposed).")
+
+    # Initialize list to hold each equation
+    equations = []
+
+    # Iterate through each set of coefficients (column in xi) for each equation
+    for j in range(xi.shape[1]):
+        # Start constructing the equation as a sum of terms
+        equation = 0
+        for i in range(xi.shape[0]):
+            coeff = xi[i, j]
+            term = rhs_list[j][i]
+            # Use sympy's sympify to convert string terms into symbolic expressions
+            term_expr = sp.sympify(term)
+            # Multiply the coefficient with the term and add to the equation
+            equation += coeff * term_expr
+
+        # Simplify the equation (optional but can make output nicer)
+        equation = sp.simplify(equation)
+        # Append the formatted equation to the list
+        equations.append(str(equation))
+
+    return equations
+
 
 if __name__ == '__main__':
     args = docopt(__doc__)
@@ -359,7 +460,7 @@ if __name__ == '__main__':
     if data == "damped_pendulum":
         data_kfold = DampedPendulumDataset.get_standard_dataset(root='./data', datatype=datatype, n_samples=1000)
     elif data == "lotka_volterra":
-        data_kfold = LotkaVolterraDataset.get_standard_dataset(root='./data', datatype=datatype, n_samples=1000)
+        data_kfold = LotkaVolterraDataset.get_standard_dataset(root='./data', datatype=datatype, n_samples=100) # 1000
     elif data == "sir":
         data_kfold = SIREpidemicDataset.get_standard_dataset(root='./data', datatype=datatype, n_samples=1000)
     else:
@@ -375,25 +476,66 @@ if __name__ == '__main__':
         "polynomial_power": int(args["--polynomial_power"]),
 
         # Fit params
-        "n_inner_epochs": 10000,
+        "n_inner_epochs": 10000,  # 10000
         "lr": float(args["--lr"]),
         "lambda_vrex": float(args["--lambda_vrex"]),
         "lambda_phi": float(args["--lambda_phi"]),
         "n_batches": 1,
 
         # Test params
-        "n_test_inner_epochs": 10000,
+        "n_test_inner_epochs": 100,  # 10000,
         "test_lr": 1e-3,
         "plot": "show",
 
         "filename": f"results/metaphysica_{train_data.__class__.__name__}",
     }
 
-    train_data.plot()
-    test_data = {"id": id_test_data, "ood": ood_test_data}
-    model, train_results, valid_results, test_results = run(train_data, test_data, params, None)
+    if not os.path.exists("./results"):
+        os.makedirs("./results")
+    if not os.path.exists("./data"):
+        os.makedirs("./data")
 
-    print(f"Test ID NRMSE: {test_results['id']['nrmse']:.4f}")
-    print(f"Test OOD NRMSE: {test_results['ood']['nrmse']:.4f}")
+    # train_data.plot()
+    test_data = {"id": id_test_data, "ood": ood_test_data}
+    # model, train_results, valid_results, test_results = run(train_data, test_data, params, None)
+    #
+    # print(f"Test ID NRMSE: {test_results['id']['nrmse']:.4f}")
+    # print(f"Test OOD NRMSE: {test_results['ood']['nrmse']:.4f}")
+
+    trainIdx, validIdx = project_utils.getRandomSplit(len(train_data), [80, 20])
+    print("cp 1")
+    valid_data = SubsetStar(train_data, validIdx)
+    print("cp 2")
+    train_data = SubsetStar(train_data, trainIdx)
+    print("cp 3")
+
+    train_results = None
+    if "fit" not in params or params["fit"]:
+        model = MetaPhysiCa(**params).to(device)
+        train_results = model.fit(train_data, **params)
+
+    model = torch.load(params["filename"] + ".pkl").to(device)
+    print("model.xi:", model.xi)
+    xi = model.xi.cpu().detach().numpy()
+    print("model.xi.shape:", model.xi.shape)
+    rhs_list = model.print()
+    print("xi:", xi)
+    print("rhs_list:", rhs_list)
+
+    # formatted_equations = formula_format(xi, rhs_list)
+    # for i, eq in enumerate(formatted_equations):
+    #     print(f"########## x{i}' = {eq}")
+
+
+    # print("Validation data")
+    # valid_results = model.test(valid_data, **{**params, "plot": False})
+
+    # print("Test data: In-distribution and Out-of-distribution")
+    # # Enze: Test Part
+    # test_results = {}
+    # for key, test_data_ in test_data.items():
+    #     test_results[key] = model.test(
+    #         test_data_, test_filename=params["filename"] + f"_test={key}", **params
+    #     )
 
 
