@@ -120,7 +120,7 @@ def unit_convert(input_folder, output_folder, ode_name, num_env=5):
 
     read_path_0 = f"{input_folder}/{ode_name}_train_{0}.csv"
     data_0 = pd.read_csv(read_path_0)
-    t = torch.tensor(data_0["t"].to_numpy())
+    t = torch.tensor(data_0["t"].to_numpy()).to(device)
 
     y_numpy = np.zeros([num_env, len(t), state_dim])
     # for idx in range(y_numpy.shape[0]):
@@ -138,10 +138,10 @@ def unit_convert(input_folder, output_folder, ode_name, num_env=5):
         for i_var in range(state_dim):
             y_numpy[idx, :, i_var] = data[f"{VARIABLE_IPAD_DICT[i_var + 1]}"].to_numpy()
             dy_numpy[idx, :, i_var] = data[f"d{VARIABLE_IPAD_DICT[i_var + 1]}"].to_numpy()
-    y = torch.tensor(y_numpy)
+    y = torch.tensor(y_numpy).to(device)
     dy = dict()
-    dy["smooth"] = torch.tensor(dy_numpy)
-    max_for_scaling = torch.tensor(np.asarray([1.0, 1.0]))
+    dy["smooth"] = torch.tensor(dy_numpy).to(device)
+    max_for_scaling = torch.tensor(np.asarray([1.0, 1.0])).to(device)
     phy_params = None
 
     with open(write_path, "wb") as f:
